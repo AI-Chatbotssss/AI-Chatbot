@@ -6,8 +6,15 @@ API = "http://localhost:8001"
 st.set_page_config(layout="wide", page_title="InternAssist AI")
 
 # ── SIDEBAR NAV ───────────────────────────────────────────────────────────────
+<<<<<<< HEAD
 with st.sidebar:
     st.title("InternAssist AI")
+=======
+
+
+with st.sidebar:
+    st.title("InternAssist")
+>>>>>>> d3351407c710324370e7acd129e6c3e5f904636d
     st.caption("CSIT349-G01")
     st.divider()
 
@@ -20,9 +27,12 @@ with st.sidebar:
     if st.button("MentorBridge", use_container_width=True):
         st.session_state.page = "MentorBridge"
 
+<<<<<<< HEAD
     if st.button("Report Writer", use_container_width=True):
         st.session_state.page = "Report Writer"
 
+=======
+>>>>>>> d3351407c710324370e7acd129e6c3e5f904636d
 # ── INTERNTRACK PAGE ──────────────────────────────────────────────────────────
 if st.session_state.page == "InternTrack":
 
@@ -64,6 +74,15 @@ if st.session_state.page == "InternTrack":
         for i, s in enumerate(it_suggestions):
             if st.button(s, key=f"it_btn_{i}", use_container_width=True):
                 st.session_state.interntrack_messages.append({"role": "user", "content": s})
+<<<<<<< HEAD
+=======
+                try:
+                    res = requests.post(f"{API}/chat", json={"message": s})
+                    reply = res.json()["reply"]
+                except Exception:
+                    reply = "_(Could not connect to backend. Make sure the backend is running.)_"
+                st.session_state.interntrack_messages.append({"role": "assistant", "content": reply})
+>>>>>>> d3351407c710324370e7acd129e6c3e5f904636d
                 st.rerun()
 
     for m in st.session_state.interntrack_messages:
@@ -82,7 +101,18 @@ if st.session_state.page == "InternTrack":
 # ── MENTORBRIDGE PAGE ─────────────────────────────────────────────────────────
 elif st.session_state.page == "MentorBridge":
 
+<<<<<<< HEAD
     st.title("MentorBridge")
+=======
+    col1, col2 = st.columns([6, 1])
+    with col1:
+        st.title("MentorBridge")
+    with col2:
+        st.write("")  # spacing
+        if st.button("🗑️ Clear", key="mb_clear"):
+            st.session_state.mentorbridge_messages = []
+            st.rerun()
+>>>>>>> d3351407c710324370e7acd129e6c3e5f904636d
     st.caption("Find the right words when approaching your supervisor or mentor.")
     st.divider()
 
@@ -100,6 +130,15 @@ elif st.session_state.page == "MentorBridge":
         for i, s in enumerate(mb_suggestions):
             if st.button(s, key=f"mb_btn_{i}", use_container_width=True):
                 st.session_state.mentorbridge_messages.append({"role": "user", "content": s})
+<<<<<<< HEAD
+=======
+                try:
+                    res = requests.post(f"{API}/chat", json={"message": s})
+                    reply = res.json()["reply"]
+                except Exception:
+                    reply = "_(Could not connect to backend. Make sure the backend is running.)_"
+                st.session_state.mentorbridge_messages.append({"role": "assistant", "content": reply})
+>>>>>>> d3351407c710324370e7acd129e6c3e5f904636d
                 st.rerun()
 
     for m in st.session_state.mentorbridge_messages:
@@ -113,6 +152,7 @@ elif st.session_state.page == "MentorBridge":
         except Exception:
             reply = "_(Could not connect to backend. Make sure the backend is running.)_"
         st.session_state.mentorbridge_messages.append({"role": "assistant", "content": reply})
+<<<<<<< HEAD
         st.rerun()
 
 # ── REPORT WRITER PAGE ────────────────────────────────────────────────────────
@@ -161,3 +201,6 @@ elif st.session_state.page == "Report Writer":
                 )
             except Exception:
                 st.error("_(Could not connect to backend. Make sure the backend is running.)_")
+=======
+        st.rerun()
+>>>>>>> d3351407c710324370e7acd129e6c3e5f904636d

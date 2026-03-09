@@ -6,6 +6,7 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+<<<<<<< HEAD
 # ── SYSTEM PROMPTS ────────────────────────────────────────────────────────────
 
 INTERNTRACK_PROMPT = """
@@ -195,6 +196,28 @@ def chat_ai(message, history=None):
         system = INTERNTRACK_PROMPT
 
     messages = [{"role": "system", "content": system}]
+=======
+SYSTEM_PROMPT = """
+You are InternTrack AI.
+
+You have TWO MODES:
+
+1) InternTrack
+Help students track internship hours, progress, tasks, and reports.
+
+2) MentorBridge
+Help students communicate professionally with supervisors.
+
+Detect the user intent automatically.
+
+If internship related → InternTrack
+If workplace communication → MentorBridge
+"""
+
+def chat_ai(message, history=None):
+
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+>>>>>>> d3351407c710324370e7acd129e6c3e5f904636d
 
     if history:
         messages.extend(history)
@@ -206,4 +229,10 @@ def chat_ai(message, history=None):
         messages=messages
     )
 
+<<<<<<< HEAD
     return {"reply": response.choices[0].message.content}
+=======
+    reply = response.choices[0].message.content
+
+    return {"reply": reply}
+>>>>>>> d3351407c710324370e7acd129e6c3e5f904636d
