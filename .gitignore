@@ -1,4 +1,8 @@
+<<<<<<< Updated upstream
 # Environment variables - NEVER push secrets
+=======
+# Environment variables - NEVER push API keys
+>>>>>>> Stashed changes
 .env
 *.env
 
