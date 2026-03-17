@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from dotenv import load_dotenv
 from openai import OpenAI
 from database import chat_collection, config_collection
@@ -23,10 +23,14 @@ internship programs.
 
 ROLE:
 Help students log their daily internship hours, calculate their progress,
-log tasks completed, and estimate when they will complete their required hours.
+log tasks completed, and show when they will complete their required hours.
 
 ON START:
-Ask the student for:
+ONLY ask for setup details if NO STUDENT PROFILE is provided at the bottom 
+of this prompt. If a student profile IS provided, skip setup entirely and 
+immediately answer the student's question using the provided data.
+
+If no profile exists, ask the student for:
 1. Their total required internship hours (e.g., 300, 500, 600)
 2. Their internship start date
 3. Their daily working hours (default: 8 hrs/day)
@@ -38,13 +42,13 @@ TRACKING RULES:
 - When the user says "+8 today" or "I worked 6 hours today", update the total
   and ask for task details
 - After the user provides task details, store and summarize them for the day
-- Always calculate: hours remaining, % completed, estimated workdays left,
-  estimated end date
-- Account for weekends (Mon-Fri only) and public holidays by country
+- ALWAYS use the pre-calculated values from the student profile below.
+  DO NOT recalculate total hours, remaining hours, or estimated end date 
+  on your own. These are already computed accurately in Python.
 - Round percentage to 1 decimal place
 
 OUTPUT FORMAT:
-Always structure your response exactly as follows:
+Always structure your response exactly as follows when showing progress:
 
 **Progress Breakdown**
 - Total Goal: X hours
@@ -69,14 +73,18 @@ X.X Days
 
 **Estimated End Date**
 *Day, Month DD, YYYY*
+Use EXACTLY the pre-calculated estimated end date from the student profile.
+DO NOT compute or guess this yourself.
 
 ---
 
 **Timeline Considerations:**
-- Only list public holidays that fall between today's date and the estimated end date.
-- Do NOT mention any holidays beyond the estimated end date.
-- For each relevant holiday, note if an off-in-lieu day applies and how it affects the end date.
-- If there are no holidays within the remaining period, write: "No public holidays fall within your remaining internship period."
+- Only list public holidays from the student profile that fall between 
+  today's date and the pre-calculated estimated end date.
+- DO NOT mention any holidays beyond the estimated end date.
+- For each relevant holiday, note if an off-in-lieu day applies.
+- If there are no holidays in range, write: 
+  "No public holidays fall within your remaining internship period."
 
 ---
 
@@ -154,8 +162,10 @@ RULES:
 - Always write in a clear, professional tone.
 - Expand short task descriptions into full, proper sentences without adding fake details.
 - Group similar tasks together.
-- DO NOT use "fluff" or "corporate speak" (e.g., avoid "enhancing productivity," "facilitating a working environment," or "maintaining an efficient workflow").
-- Keep the summary literal. Describe exactly WHAT was done, not the "higher purpose" or "value" of the task.
+- DO NOT use "fluff" or "corporate speak" (e.g., avoid "enhancing productivity," 
+  "facilitating a working environment," or "maintaining an efficient workflow").
+- Keep the summary literal. Describe exactly WHAT was done, not the "higher purpose" 
+  or "value" of the task.
 - If the message contains "Daily Report" generate a Daily Activity Report.
 - If the message contains "Weekly Report" generate a Weekly Activity Report.
 - If the message contains "Monthly Report" generate a Monthly Activity Report.
@@ -172,13 +182,12 @@ Tasks Accomplished:
 2. (expanded professional description of task)
 
 Summary:
-(A 1-2 sentence literal summary. For example: "Today I completed [Task A] and researched [Topic B].")
+(A 1-2 sentence literal summary.)
 ---
 
-... (Keep Weekly/Monthly formats as they were) ...
-
 TONE:
-Be professional and direct. Avoid flowery language, buzzwords, or exaggerated descriptions of simple tasks. Think "Technical Documentation" rather than "Marketing Brochure."
+Be professional and direct. Avoid flowery language, buzzwords, or exaggerated 
+descriptions of simple tasks. Think "Technical Documentation" not "Marketing Brochure."
 """
 
 # ── KEYWORD DETECTION ─────────────────────────────────────────────────────────
@@ -227,8 +236,6 @@ REPORT_KEYWORDS = [
 
 def detect_route(message: str) -> str:
     message_lower = message.lower()
-
-    # MentorBridge FIRST — takes priority over report
     if any(k in message_lower for k in MENTORBRIDGE_KEYWORDS):
         return "mentorbridge"
     elif any(k in message_lower for k in REPORT_KEYWORDS):
@@ -236,54 +243,148 @@ def detect_route(message: str) -> str:
     else:
         return "interntrack"
 
-# ── MAIN CHAT FUNCTION ────────────────────────────────────────────────────────
+# ── DATE CALCULATION ──────────────────────────────────────────────────────────
 
-def _get_country_holidays(country):
+_DAY_MAP = {
+    "Mon": 0, "Tue": 1, "Wed": 2,
+    "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6
+}
+
+_COUNTRY_MAP = {
+    "Philippines": "PH",
+    "Singapore": "SG",
+    "USA": "US",
+    "Japan": "JP"
+}
+
+
+def _get_holiday_dict(country: str) -> dict:
+    """Return a dict of {date: holiday_name} for the given country (this year + next)."""
     if not _HOLIDAYS_AVAILABLE:
-        return ""
-    _country_map = {"Philippines": "PH", "Singapore": "SG", "USA": "US", "Japan": "JP"}
-    code = _country_map.get(country)
+        return {}
+    code = _COUNTRY_MAP.get(country)
     if not code:
-        return ""
+        return {}
     try:
-        h = hol.country_holidays(code, years=datetime.now().year)
-        return "\n".join(
-            f"  - {d.strftime('%B %d, %Y')}: {name}" for d, name in sorted(h.items())
-        )
+        today = datetime.now()
+        h = hol.country_holidays(code, years=[today.year, today.year + 1])
+        return {d: name for d, name in h.items()}
     except Exception:
-        return ""
+        return {}
 
 
-def _build_interntrack_prompt():
+def _calculate_end_date(
+    remaining_hours: int,
+    daily_hours: int,
+    working_days: list,
+    holiday_dict: dict
+) -> date:
+    """
+    Count forward from today, skipping non-working days and public holidays,
+    until remaining_hours are consumed. Returns the estimated end date.
+    """
+    if daily_hours <= 0:
+        daily_hours = 8
+
+    working_day_numbers = {_DAY_MAP[d] for d in working_days if d in _DAY_MAP}
+    hours_left = remaining_hours
+    current = date.today()
+
+    while hours_left > 0:
+        if current.weekday() in working_day_numbers and current not in holiday_dict:
+            hours_left -= daily_hours
+        if hours_left > 0:
+            current += timedelta(days=1)
+
+    return current
+
+
+def _format_holidays_in_range(
+    holiday_dict: dict,
+    end_date: date
+) -> str:
+    """Return a formatted string of holidays between today and end_date (inclusive)."""
+    today = date.today()
+    relevant = {
+        d: name for d, name in holiday_dict.items()
+        if today <= d <= end_date
+    }
+    if not relevant:
+        return "  None — no public holidays fall within your remaining internship period."
+    lines = []
+    for d in sorted(relevant):
+        lines.append(f"  - {d.strftime('%B %d, %Y')}: {relevant[d]}")
+    return "\n".join(lines)
+
+
+# ── PROMPT BUILDER ────────────────────────────────────────────────────────────
+
+def _build_interntrack_prompt() -> str:
     config = config_collection.find_one({}, {"_id": 0})
     if not config:
         return INTERNTRACK_PROMPT
 
-    country = config.get("country", "")
-    holidays_text = _get_country_holidays(country)
+    total_hours   = int(config.get("total_hours", 500))
+    current_hours = int(config.get("current_hours", 0))
+    daily_hours   = int(config.get("daily_hours", 8))
+    country       = config.get("country", "")
+    working_days  = config.get("working_days", ["Mon", "Tue", "Wed", "Thu", "Fri"])
+
+    remaining_hours = max(total_hours - current_hours, 0)
+    full_days       = remaining_hours // daily_hours
+    partial_hours   = remaining_hours % daily_hours
+    partial_day     = round(partial_hours / daily_hours, 1) if partial_hours > 0 else 0
+    total_days      = round(full_days + partial_day, 1)
+    percentage      = round((current_hours / total_hours * 100), 1) if total_hours > 0 else 0.0
+
+    # Python-calculated end date
+    holiday_dict = _get_holiday_dict(country)
+    end_date     = _calculate_end_date(remaining_hours, daily_hours, working_days, holiday_dict)
+    end_date_str = end_date.strftime("%A, %B %d, %Y")
+
+    # Holidays only within the OJT period
+    holidays_in_range = _format_holidays_in_range(holiday_dict, end_date)
 
     config_section = f"""
 
-STUDENT PROFILE (already configured — do NOT ask for this information again):
-- Total Required Hours: {config.get('total_hours', 'Not set')}
-- Current Logged Hours: {config.get('current_hours', 0)}
-- Daily Working Hours: {config.get('daily_hours', 8)} hrs/day
-- Internship Start Date: {config.get('start_date', 'Not set')}
-- Country: {country or 'Not set'}
-- Working Days: {', '.join(config.get('working_days', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']))}
-"""
+================================================================================
+CRITICAL INSTRUCTION — READ BEFORE RESPONDING:
+- The student has ALREADY completed their setup. 
+- DO NOT ask for total hours, current hours, start date, daily hours, 
+  country, or working days. This information is already known.
+- DO NOT recalculate the estimated end date. It has been pre-calculated 
+  accurately in Python. Use it exactly as shown below.
+- Respond immediately using the data provided in the student profile.
+================================================================================
 
-    if holidays_text:
-        config_section += f"""
-{country} Public Holidays {datetime.now().year} (reference list — only mention holidays that fall between today and the student's estimated end date. Do NOT mention holidays beyond the estimated end date):
-{holidays_text}
+STUDENT PROFILE (pre-configured — use these values directly):
+- Total Required Hours  : {total_hours} hours
+- Hours Logged (today)  : {current_hours} hours
+- Remaining Hours       : {remaining_hours} hours
+- Percentage Completed  : {percentage}%
+- Daily Working Hours   : {daily_hours} hrs/day
+- Working Days          : {', '.join(working_days)}
+- Country               : {country or 'Not set'}
+- Internship Start Date : {config.get('start_date', 'Not set')}
+
+PRE-CALCULATED PROGRESS (use these exactly — DO NOT recompute):
+- Total Workdays Remaining : {total_days} days
+- Full Workdays             : {full_days} days
+- Partial Day              : {partial_hours} hours ({partial_day} day)
+- Estimated End Date       : {end_date_str}
+
+PUBLIC HOLIDAYS WITHIN OJT PERIOD (today → {end_date_str}):
+{holidays_in_range}
+(DO NOT mention any holidays outside this range.)
+================================================================================
 """
 
     return INTERNTRACK_PROMPT + config_section
 
 
-def chat_ai(message, history=None):
+# ── MAIN CHAT FUNCTION ────────────────────────────────────────────────────────
 
+def chat_ai(message, history=None):
     route = detect_route(message)
 
     if route == "report":
