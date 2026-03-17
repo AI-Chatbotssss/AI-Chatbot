@@ -67,19 +67,12 @@ pip install -r frontend/requirements.txt
 Create a `.env` file in the **project root** (same level as this README):
 
 ```
-MONGO_URI=mongodb://localhost:27017
 OPENAI_API_KEY=your_openai_api_key_here
-API_BASE_URL=http://localhost:8001
+API_BASE_URL=http:your_railway_url
 ```
 
 `API_BASE_URL` is optional and defaults to `http://localhost:8001`.
 
-> If using MongoDB Atlas, replace `MONGO_URI` with your Atlas connection string:
-> ```
-> MONGO_URI=mongodb+srv://USERNAME:PASSWORD@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
-> ```
-
----
 
 ## Running the App
 
