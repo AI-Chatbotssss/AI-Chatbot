@@ -10,6 +10,10 @@ Includes three tools: **InternTrack** (hours tracking), **MentorBridge** (workpl
 - Hour updates are saved to backend config automatically.
 - `Days Left` is calculated using your configured **Daily Hours**.
 - Added AI disclaimer blocks in all AI sections.
+- Added English-only input validation in backend routing.
+- Added internship-scope guard response:
+	- "I can only help with internship-related topics in InternTrack, MentorBridge, and ReportWriter."
+- MentorBridge is now handled as single-turn (no prior chat history is sent).
 - Chat UI now uses Messenger-style alignment:
 	- User messages on the right (orange avatar)
 	- Assistant messages on the left (red avatar)
@@ -22,7 +26,7 @@ Includes three tools: **InternTrack** (hours tracking), **MentorBridge** (workpl
 | Frontend | Streamlit                         |
 | Backend  | FastAPI + Uvicorn                 |
 | Database | MongoDB (local or Atlas)          |
-| AI       | OpenAI GPT-4o-mini                |
+| AI       | OpenAI GPT-4o                     |
 
 ---
 
@@ -111,6 +115,24 @@ Rules:
 - Hours are clamped between `0` and `Total Required Hours`.
 - `Days Left` updates using `ceil(remaining / daily_hours)`.
 - `Daily Hours` comes from the Configuration panel.
+
+---
+
+## Language and Scope Rules
+
+- The backend accepts **English-only** user input.
+- Non-English input receives this response:
+	- `Please write your message in English only.`
+- Programming/coding queries are out of scope and receive this response:
+	- `I can only help with internship-related topics in InternTrack, MentorBridge, and ReportWriter.`
+
+---
+
+## MentorBridge Behavior
+
+- MentorBridge runs in **single-turn mode**.
+- Previous MentorBridge messages are not carried into new prompts.
+- This keeps each workplace-message draft focused on the latest situation only.
 
 ---
 
