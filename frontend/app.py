@@ -48,11 +48,11 @@ if st.session_state.get("scroll_to_top", False):
 # ══════════════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ══════════════════════════════════════════════════════════════════════════════
-def send_message(user_input, message_list):
+def send_message(user_input, message_list, include_history=True):
     """Send a message to the API and return the AI response"""
     message_list.append({"role": "user", "content": user_input})
     try:
-        history = message_list[:-1]
+        history = message_list[:-1] if include_history else []
         res = requests.post(
             f"{API}/chat",
             json={"message": user_input, "history": history},
@@ -587,7 +587,7 @@ elif st.session_state.page == "MentorBridge":
     """, unsafe_allow_html=True)
     
     if "mentorbridge_messages" not in st.session_state:
-        st.session_state.mentorbridge_messages = load_chat_history("mentorbridge")
+        st.session_state.mentorbridge_messages = []
     
     # Scenarios
     if not st.session_state.mentorbridge_messages:
@@ -616,7 +616,8 @@ elif st.session_state.page == "MentorBridge":
                 """, unsafe_allow_html=True)
                 if st.button(prompt[:45] + "...", key=f"mb_btn_{i}", use_container_width=True, help=prompt):
                     with st.spinner("Crafting response..."):
-                        send_message(prompt, st.session_state.mentorbridge_messages)
+                        st.session_state.mentorbridge_messages = []
+                        send_message(prompt, st.session_state.mentorbridge_messages, include_history=False)
                     st.rerun()
     
     st.markdown('<div class="gradient-divider"></div>', unsafe_allow_html=True)
@@ -629,7 +630,8 @@ elif st.session_state.page == "MentorBridge":
     # Input
     if user_input := st.chat_input("Describe your situation...", key="mb_input"):
         with st.spinner("Crafting response..."):
-            send_message(user_input, st.session_state.mentorbridge_messages)
+            st.session_state.mentorbridge_messages = []
+            send_message(user_input, st.session_state.mentorbridge_messages, include_history=False)
         st.rerun()
     
     if st.session_state.mentorbridge_messages:
